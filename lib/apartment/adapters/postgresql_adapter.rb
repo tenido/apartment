@@ -95,7 +95,64 @@ module Apartment
       rescue *rescuable_exceptions
         raise SchemaExists, "The schema #{database} already exists."
       end
+      
+      def import_database_schema
+        ActiveRecord::Schema.verbose = false    # do not log schema load output.
+        if Rails.application.config.active_record.schema_format == :sql
+          load_or_abort_structure_sql("#{Rails.root}/db/structure.sql")
+        else  
+          load_or_abort(Apartment.database_schema_file) if Apartment.database_schema_file
+        end
+      end
+      
+      def load_or_abort_structure_sql(file)
+        if File.exists?(file)
+          
+          pg_schema_name = @current_database
 
+          pg_database = ActiveRecord::Base.connection.current_database
+          pg_user = Apartment::Database.adapter.instance_variable_get('@config')[:username]
+          pg_password = Apartment::Database.adapter.instance_variable_get('@config')[:password]
+          pg_port = Apartment::Database.adapter.instance_variable_get('@config')[:port]
+          pg_host = Apartment::Database.adapter.instance_variable_get('@config')[:host]
+          
+          # TODO : can we just call Rails set_psql_env in postgresql_database_tasks.rb insetead ?
+          ENV['PGPASSWORD'] = pg_password
+          ENV['PGUSER'] = pg_user
+          ENV['PGHOST'] = pg_host
+          ENV['PGPORT'] = pg_port.to_s
+
+          # Set search_path to use instead of the one in the structure.sql
+          ENV['PGOPTIONS']="--search_path=#{pg_schema_name}"
+
+          run_timestamp  = Time.now.strftime('%F-%H-%M-%S')
+          
+          apartment_temp_dir = File.join(Rails.root, 'tmp/apartment')
+          FileUtils.mkdir_p apartment_temp_dir
+                    
+          temp_file_base = "#{apartment_temp_dir}/#{pg_database}_#{pg_schema_name}_structure_#{run_timestamp}"
+          temp_sql_file  = "#{temp_file_base}.sql"
+          temp_sql_log   = "#{temp_file_base}.log"
+
+          # Take out the search_path from the dump file, and create schema statement
+          # This works for the main use case where all the tables are in 1 main schema ,
+          # ie database.yml has something like   schema_search_path: app_schema 
+          # or schema_search_path: app_schema,hstore
+          # Possible TODO : override rake task calling structure_dump(filename) in  
+          # rails/rails/blob/master/activerecord/lib/active_record/tasks/postgresql_database_tasks.rb
+  
+          structure_file_contents = File.read(file)
+          output_file = File.open(temp_sql_file,'w')
+
+          changed_sql_text = structure_file_contents.gsub(/^(CREATE SCHEMA|SET search_path)/,'-- Apartment gem change -- \1')
+          output_file.puts(changed_sql_text)
+
+          %x{psql -d #{pg_database} -f #{temp_sql_file} -L #{temp_sql_log} }
+        else
+          abort %{#{file} doesn't exist yet}
+        end
+      end
+      
     private
 
       #   Generate the final search path to set including persistent_schemas
