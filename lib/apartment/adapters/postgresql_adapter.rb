@@ -127,7 +127,7 @@ module Apartment
 
           run_timestamp  = Time.now.strftime('%F-%H-%M-%S')
           
-          apartment_temp_dir = File.join(Rails.root, 'tmp/apartment')
+          apartment_temp_dir = File.join(Rails.root, "tmp/apartment/#{Rails.env}")
           FileUtils.mkdir_p apartment_temp_dir
                     
           temp_file_base = "#{apartment_temp_dir}/#{pg_database}_#{pg_schema_name}_structure_#{run_timestamp}"
@@ -147,7 +147,12 @@ module Apartment
           changed_sql_text = structure_file_contents.gsub(/^(CREATE SCHEMA|SET search_path)/,'-- Apartment gem change -- \1')
           output_file.puts(changed_sql_text)
 
-          %x{psql -d #{pg_database} -f #{temp_sql_file} -L #{temp_sql_log} }
+          if File.exists?(temp_sql_file)
+            %x{psql -d #{pg_database} -f #{temp_sql_file} -L #{temp_sql_log} }
+          else
+            abort %{#{temp_sql_file} doesn't exist yet}
+          end
+          
         else
           abort %{#{file} doesn't exist yet}
         end
