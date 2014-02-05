@@ -11,7 +11,8 @@ module Apartment
     extend Forwardable
 
     ACCESSOR_METHODS  = [:use_schemas, :seed_after_create, :prepend_environment, :append_environment]
-    WRITER_METHODS    = [:database_names, :database_schema_file, :excluded_models, :default_schema, :persistent_schemas, :connection_class]
+    WRITER_METHODS    = [:database_names, :database_schema_file, :excluded_models, :default_schema, :persistent_schemas, :connection_class, :schema_name_prefix]
+
 
     attr_accessor(*ACCESSOR_METHODS)
     attr_writer(*WRITER_METHODS)
@@ -65,6 +66,10 @@ module Apartment
       warn "[Deprecation Warning] `use_postgresql_schemas=` is now deprecated, please use `use_schemas=`"
       self.use_schemas = to_use_or_not_to_use
     end
+    
+    def schema_name_prefix
+      @schema_name_prefix || ''
+    end    
   end
 
   # Exceptions

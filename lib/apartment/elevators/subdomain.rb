@@ -22,7 +22,7 @@ module Apartment
         tenant = if self.class.excluded_subdomains.include?(request_subdomain)
           nil
         else
-          request_subdomain
+          Apartment.schema_name_prefix + request_subdomain
         end
 
         tenant.presence
